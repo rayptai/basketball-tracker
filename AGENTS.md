@@ -4,9 +4,7 @@
 
 - Read [plan.md](plan.md) before implementing changes. It contains the approved
   plan and design; this file provides working rules for contributors and agents.
-- The current authorized work is documentation only. Do not create application
-  code, project configuration, tests, or runtime data until the user authorizes
-  implementation. Once implementation is authorized, follow the sequence in
+- Implementation of the approved plan is authorized. Follow the sequence in
   `plan.md` and the user's requested scope.
 - Later explicit user instructions take precedence. Keep these documents aligned
   when requirements change. Do not silently expand the first-version scope.

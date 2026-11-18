@@ -1,6 +1,6 @@
 # Basketball Shooting Tracker plan and design
 
-Status: plan approved. Application implementation is pending a separate request.
+Status: first-version implementation complete and verified on Python 3.14.10.
 
 This document is the single source of truth for the approved application design
 and implementation plan. It replaces `DESIGN.md` to avoid duplicate documents.
@@ -248,6 +248,18 @@ Use pytest temporary directories for filesystem tests, including CLI tests.
 Avoid tests that depend on personal settings or session files. Keep local-date
 tests deterministic. Test useful behavior and failure paths without mirroring
 implementation details.
+
+## Implementation results
+
+All seven implementation steps are complete. The application uses only standard
+libraries at runtime, with pytest as the development test dependency. The README
+documents setup, commands, paths, file formats, and limitations.
+
+Validation: `python -m pytest -q` passed all 94 tests. A separate-process smoke
+check using temporary data also exercised settings inspection and updates,
+recording sessions with default and explicit players, chronological history,
+per-player and combined statistics, and nested command help. No personal runtime
+data was created in the repository.
 
 ## Deferred features
 

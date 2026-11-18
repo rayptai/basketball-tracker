@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "basketball-tracker"
+version = "0.1.0"
+description = "A local command-line basketball shooting tracker"
+requires-python = ">=3.14"
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=9"]
+
+[project.scripts]
+basketball-tracker = "basketball_tracker.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["basketball_tracker*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
