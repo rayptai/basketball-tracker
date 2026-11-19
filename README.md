@@ -38,6 +38,38 @@ python -m basketball_tracker add --date 2020-01-02 -1 8 10 -2 12 20 -3 0 0
 Dates must use `YYYY-MM-DD`, be valid calendar dates, and not be in the future.
 You can record multiple sessions for the same player on the same date.
 
+## Usage tips: add an entry and show history
+
+After installing with `python -m pip install -e .`, you can use the shorter
+`basketball-tracker` command. Set your default player once, then add a session:
+
+```powershell
+basketball-tracker config set-player "Ray"
+basketball-tracker add -1 8 10 -2 12 20 -3 5 15
+```
+
+This records today's session for Ray. Each pair is makes followed by attempts;
+include all three shot types and use `0 0` for any you did not practice. Each
+`add` saves a new session, including when another session has the same date.
+Use `--player "Jordan Smith"` to override the default for an entry, or
+`--date 2020-01-02` to record an earlier session.
+
+Choose the history you want to see:
+
+```powershell
+basketball-tracker history
+basketball-tracker history --player "Jordan Smith"
+basketball-tracker history --all-players
+```
+
+These show the default player's sessions, a specific player's sessions, and
+everyone's sessions, respectively, newest date first. Without a configured
+default, use `--player` or `--all-players`. Run from the same directory each time
+so the commands use the same default data file.
+
+The same tips appear in `basketball-tracker --help`, `add --help`, and
+`history --help`.
+
 ## Players and settings
 
 ```powershell
@@ -116,7 +148,9 @@ transactional. Use one writing process at a time.
 
 ## Help and exit statuses
 
-Use `-h` or `--help` on any command, including nested configuration commands:
+Top-level `basketball-tracker --help` displays the complete command reference,
+including player selection, dates, shot counts, and configuration commands.
+Use `-h` or `--help` on a specific command for its focused help:
 
 ```powershell
 python -m basketball_tracker add --help

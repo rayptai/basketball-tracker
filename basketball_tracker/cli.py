@@ -17,7 +17,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="basketball-tracker",
         description="Record basketball shooting sessions and review player statistics.",
-        epilog='Example: python -m basketball_tracker config set-player "Ray"',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--settings-file", type=Path, default=Path("data/settings.json"),
                         help="JSON settings path (default: data/settings.json, relative to current directory)")
@@ -26,10 +26,23 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
     add = commands.add_parser(
         "add", help="Record one session", description="Record a session. All shot counts must be nonnegative integers.",
-        epilog="Example: python -m basketball_tracker add -1 8 10 -2 12 20 -3 5 15",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Usage tips for adding a new entry:\n"
+            '  Set a default player once: basketball-tracker config set-player "Ray"\n'
+            "  Record today's session for that player:\n"
+            "    basketball-tracker add -1 8 10 -2 12 20 -3 5 15\n"
+            "  Supply all three shot options, each as MAKES ATTEMPTS.\n"
+            "  Use 0 0 for a shot type you did not practice.\n"
+            "  Override the player or record an earlier date:\n"
+            '    basketball-tracker add --player "Jordan Smith" --date 2020-01-02 '
+            "-1 8 10 -2 0 0 -3 5 15\n"
+            "  Each add command saves a separate session, even on the same date."
+        ),
     )
     add.add_argument("--date", help="Session date in YYYY-MM-DD format (default: local today)")
     add.add_argument("--player", help="Player name; overrides the configured default without changing it")
+    command_parsers = [add]
     for number, destination, label in (
         (1, "free_throws", "Free throws"), (2, "two_pointers", "Two-pointers"),
         (3, "three_pointers", "Three-pointers"),
@@ -43,15 +56,35 @@ def build_parser() -> argparse.ArgumentParser:
             description="Select a player or use the configured default. --all-players includes everyone.",
             epilog=f'Example: python -m basketball_tracker {name} --player "Ray"',
         )
+        if name == "history":
+            command.formatter_class = argparse.RawDescriptionHelpFormatter
+            command.epilog = (
+                "Usage tips for showing history:\n"
+                "  Default player's sessions: basketball-tracker history\n"
+                '  A specific player: basketball-tracker history --player "Jordan Smith"\n'
+                "  Everyone's sessions: basketball-tracker history --all-players\n"
+                "  Sessions appear newest date first, with makes, attempts, and percentages.\n"
+                "  Without a default player, use --player or --all-players.\n"
+                "  Run from the same directory to use the same default data file."
+            )
         selection = command.add_mutually_exclusive_group()
         selection.add_argument("--player", help="Player name; overrides the configured default")
         selection.add_argument("--all-players", action="store_true", help="Include every player")
+        command_parsers.append(command)
     config = commands.add_parser("config", help="Inspect or change default settings",
                                  epilog='Example: python -m basketball_tracker config set-player "Ray"')
     config_commands = config.add_subparsers(dest="config_command", required=True)
-    config_commands.add_parser("show", help="Show settings without creating files")
+    show = config_commands.add_parser("show", help="Show settings without creating files")
     set_player = config_commands.add_parser("set-player", help="Save the default player name")
     set_player.add_argument("player_name", help='Default player name; quote names containing spaces')
+    command_parsers.extend([config, show, set_player])
+    # Reuse each command's help so the complete reference stays in sync with it.
+    parser.epilog = (
+        "Global file options go before the command.\n"
+        "Use COMMAND --help for help on a single command.\n\n"
+        "Command reference:\n\n"
+        + "\n\n".join(command.format_help().strip() for command in command_parsers)
+    )
     return parser
 
 

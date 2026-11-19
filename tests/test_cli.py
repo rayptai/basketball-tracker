@@ -93,7 +93,27 @@ def test_help(cli, tmp_path, capsys, command, flag):
     with pytest.raises(SystemExit) as result:
         cli(*command, flag)
     assert result.value.code == 0
-    assert "usage:" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert "usage:" in output
+    if not command or command == ("add",):
+        assert "Usage tips for adding a new entry" in output
+        assert 'basketball-tracker config set-player "Ray"' in output
+        assert "basketball-tracker add -1 8 10 -2 12 20 -3 5 15" in output
+        assert "Use 0 0" in output
+    if not command or command == ("history",):
+        assert "Usage tips for showing history" in output
+        assert 'basketball-tracker history --player "Jordan Smith"' in output
+        assert "basketball-tracker history --all-players" in output
+        assert "newest date first" in output
+    if not command:
+        for option in ("--settings-file", "--data-file", "--date", "--player", "--all-players",
+                       "-1 MAKES ATTEMPTS", "-2 MAKES ATTEMPTS", "-3 MAKES ATTEMPTS"):
+            assert option in output
+        for command_name in ("add", "history", "stats", "config show", "config set-player"):
+            assert f"basketball-tracker {command_name}" in output
+        assert "makes followed by attempts" in output
+        assert "default" in output
+        assert "Global file options go before the command" in output
     assert list(tmp_path.iterdir()) == []
 
 

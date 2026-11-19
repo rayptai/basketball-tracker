@@ -202,8 +202,12 @@ python -m basketball_tracker config set-player --help
 ```
 
 Help explains commands, paths, defaults, player overrides, numbered shot options,
-the makes/attempts order, and examples. Help exits successfully without modifying
-files.
+the makes/attempts order, and examples. Top-level help includes the complete
+reference for all commands, including nested configuration commands; individual
+command help remains focused on that command. Include usage tips for adding an
+entry (default player, shot pairs, zero attempts, and date/player overrides) and
+showing history (default player, specific player, all players, and date order).
+Help exits successfully without modifying files.
 
 ## Errors and edge cases
 
