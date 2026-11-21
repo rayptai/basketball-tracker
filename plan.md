@@ -1,43 +1,58 @@
 # Basketball Shooting Tracker plan and design
 
-Status: first-version implementation complete and verified on Python 3.14.10.
+Status: first-version CLI complete and verified on Python 3.14.10; second-version
+dark-themed Streamlit web dashboard planned and approved for upcoming
+implementation.
 
 This document is the single source of truth for the approved application design
 and implementation plan. It replaces `DESIGN.md` to avoid duplicate documents.
 
 ## Purpose and scope
 
-Build a small Python 3.14 command-line application for recording basketball
-shooting sessions, reviewing history, and calculating aggregate statistics. This
-is a first independent application in an eight-week AI-assisted programming
+Build a small Python 3.14 application for recording basketball shooting
+sessions, reviewing history, and analyzing aggregate statistics through both a
+command-line interface and a local dark-themed sports analytics web dashboard.
+This is an independent application in an eight-week AI-assisted programming
 curriculum. Keep the code easy for a developer with Java and Python experience
 to review and modify.
 
-The first version records sessions by date and player, tracks makes and attempts
-for free throws, two-pointers, and three-pointers, saves sessions locally as CSV,
-and stores default settings as JSON. Automated tests use pytest.
+The first version (implemented) records sessions by date and player via CLI,
+tracks makes and attempts for free throws, two-pointers, and three-pointers,
+saves sessions locally as CSV, and stores default settings as JSON. The planned
+second version adds a local Streamlit web dashboard that preserves all existing
+CLI commands, business logic, and data rules. Automated tests use pytest
+(including Streamlit's headless `AppTest`).
 
 ## Architecture
 
-Use the standard library for application code and pytest as a development
-dependency. Use descriptive names and type hints. Avoid frameworks, databases,
-class hierarchies, repository layers, and unnecessary abstractions.
+Keep core domain logic, settings, storage, CLI, dashboard view-model helpers,
+and SVG rendering in small, standard-library Python modules. Add `streamlit>=1.40`
+as a standard runtime dependency in `pyproject.toml` for the local web dashboard
+(loaded lazily only when launching the dashboard so CLI commands remain fast),
+and `pytest` as a development dependency. Avoid databases, class hierarchies,
+repository layers, and external CDN assets.
 
 | Module | Responsibility |
 | --- | --- |
-| `cli.py` | Parse commands with `argparse`, select players, display results, and translate errors into clear messages and exit statuses |
-| `models.py` | Define the session dataclass, validate records, calculate percentages, and aggregate sessions |
-| `settings.py` | Load and save JSON configuration |
-| `storage.py` | Read and append CSV session records using `csv` and `pathlib` |
+| `cli.py` | Parse commands with `argparse` (including `web` launcher), select players, display CLI results, and translate errors into clear messages and exit statuses |
+| `models.py` | Define the session dataclass, validate records, calculate/format percentages, and aggregate category and overall totals |
+| `settings.py` | Load and save JSON configuration atomically |
+| `storage.py` | Read and append validated CSV session records using `csv` and `pathlib` |
+| `dashboard.py` | Pure-Python dashboard helpers: safe state loading, player discovery, scope resolution, inclusive date-range filtering, weighted daily trend aggregation, history formatting, and write wrappers |
+| `court_svg.py` | Pure-Python dark-themed inline SVG half-court generator with stat badges anchored on the free-throw line, 2-point area, and 3-point arc |
+| `web_app.py` | Thin dark-themed Streamlit dashboard UI (sidebar filters/settings, 5-card KPI row, court visual, add-session panel, dynamic trend chart, and history table) |
 | `__main__.py` | Start the CLI |
 
-Keep validation and calculations independent of command parsing and filesystem
-operations so they can be tested directly.
+Keep validation, calculations, filtering, trend aggregation, and SVG rendering
+independent of command parsing, Streamlit widgets, and filesystem operations so
+they can be tested directly.
 
-## Proposed directory structure
+## Directory structure
 
 ```text
 basketball-tracker/
+├── .streamlit/
+│   └── config.toml
 ├── AGENTS.md
 ├── plan.md
 ├── pyproject.toml
@@ -46,14 +61,21 @@ basketball-tracker/
 │   ├── __init__.py
 │   ├── __main__.py
 │   ├── cli.py
+│   ├── court_svg.py
+│   ├── dashboard.py
 │   ├── models.py
 │   ├── settings.py
-│   └── storage.py
+│   ├── storage.py
+│   └── web_app.py
 ├── tests/
+│   ├── conftest.py
 │   ├── test_models.py
 │   ├── test_settings.py
 │   ├── test_storage.py
-│   └── test_cli.py
+│   ├── test_cli.py
+│   ├── test_dashboard.py
+│   ├── test_court_svg.py
+│   └── test_web_app.py
 └── data/
     ├── settings.json
     └── sessions.csv
@@ -265,8 +287,159 @@ recording sessions with default and explicit players, chronological history,
 per-player and combined statistics, and nested command help. No personal runtime
 data was created in the repository.
 
+## Web dashboard design (v2)
+
+Launch the local dark-themed sports analytics dashboard via the CLI while
+preserving all existing CLI commands, business logic, and data rules:
+
+```text
+python -m basketball_tracker web [--host 127.0.0.1] [--port 8501] [--no-browser]
+python -m basketball_tracker --settings-file custom/settings.json --data-file custom/sessions.csv web
+```
+
+- Respects global `--settings-file` and `--data-file` placed before `web`
+  (defaults remain `data/settings.json` and `data/sessions.csv`, relative to the
+  current working directory).
+- Binds to `127.0.0.1` by default (local-only, matching the single-writer
+  assumption) and supports `-h`/`--help` without writing files or importing
+  Streamlit.
+- Launches `sys.executable -m streamlit run <web_app.py>` with `--server.address`,
+  `--server.port`, `--browser.gatherUsageStats false`, dark `--theme.*` flags,
+  optional `--server.headless true`, and `-- --settings-file <path> --data-file <path>`.
+- If run from source in an environment without `streamlit` installed, prints a
+  clear installation instruction (`python -m pip install -e .`) to `stderr` and
+  exits nonzero without a traceback.
+
+### Dependency justification
+
+Add `streamlit>=1.40` to `[project]` `dependencies` in `pyproject.toml`. It
+provides a Python-only reactive web UI, forms, tables, theming, local offline
+charting (bundled Altair/Vega-Lite), and headless `AppTest` testing without a
+JavaScript toolchain or separate frontend repo. Loading it lazily keeps CLI
+commands fast.
+
+### Visual theme and offline guarantee
+
+- **Dark sports analytics palette** (configured in `.streamlit/config.toml` and
+  CLI launcher flags):
+  - App canvas: `#0B1120`
+  - Card / panel surface: `#131C2E`
+  - Elevated badge / input surface: `#1B263B`
+  - Border / hairline: `#26344D`
+  - Primary accent (basketball orange): `#F97316`
+  - Category trend accents: `#38BDF8` (FT), `#34D399` (2PT), `#A78BFA` (3PT)
+  - Primary text / tabular metrics: `#F8FAFC`; muted labels: `#94A3B8`
+- **Fully offline**: Pure inline SVG half-court and Streamlit-bundled local
+  charting (Vega-Lite/Altair); zero external CDNs, remote fonts, or image
+  downloads.
+
+### Full dashboard text mock-up
+
+```text
++--------------------------------------------------------------------------------------------------------+
+| [SIDEBAR]                  |  BASKETBALL SHOOTING TRACKER                         [Scope: Ray]         |
+|                            |  Active view: Ray  |  Date range: 2026-10-21 to 2026-11-20  |  6 sessions |
+| PLAYER SCOPE               +---------------------------------------------------------------------------+
+|  (o) Default player (Ray)  |                                                                           |
+|  ( ) Specific player       |  +------------+ +-------------+ +-------------+ +-----------+ +---------+ |
+|  ( ) All players (combined)|  | SESSIONS   | | OVERALL     | | FREE THROWS | | 2-POINTERS| | 3-PNTRS | |
+|                            |  |     6      | |   58.3%     | |    82.0%    | |   61.5%   | |  37.8%  | |
+| DATE RANGE FILTER          |  | in range   | |  154 / 264  | |   41 / 50   | |  80 / 130 | | 33 / 84 | |
+|  Preset: [Last 30 days v]  |  +------------+ +-------------+ +-------------+ +-----------+ +---------+ |
+|  Start:  [2026-10-21    ]  |                                                                           |
+|  End:    [2026-11-20    ]  |  +---------------------------------------+  +---------------------------+ |
+|                            |  | COURT BREAKDOWN  (Dark SVG Half-Court)|  | RECORD SESSION            | |
+| -------------------------- |  |                                       |  |                           | |
+| DEFAULT PLAYER SETTINGS    |  |            [Backboard]                |  | Date:   [2026-11-20    ]  | |
+|  Current: Ray              |  |                (O)                    |  | Player: [Ray           ]  | |
+|  New default:              |  |      |    +-----------+    |          |  |  (edit for 1-off override)| |
+|  [Ray                   ]  |  |      |    |   Paint   |    |          |  |                           | |
+|  [ Save Default Player  ]  |  |      |  +-+[FT  82.0%]+-+  |          |  | Shot Type   Makes   Att   | |
+|                            |  |      |  |    41 / 50    |  |          |  | Free Throws [ 0 ] [ 0 ]   | |
+| -------------------------- |  |       \ | [2PT  61.5%]  | /           |  | 2-Pointers  [ 0 ] [ 0 ]   | |
+| > Data Paths (read-only)   |  |        \     80 / 130    /            |  | 3-Pointers  [ 0 ] [ 0 ]   | |
+|   data/settings.json       |  |         `._[3PT 37.8%]_.'             |  |                           | |
+|   data/sessions.csv        |  |              33 / 84                  |  | [     Save Session      ] | |
+|                            |  +---------------------------------------+  +---------------------------+ |
+|                            |                                                                           |
+|                            |  +---------------------------------------------------------------------+  |
+|                            |  | SHOOTING PERCENTAGE TREND OVER TIME                                 |  |
+|                            |  | Series: [x] Overall   [x] FT   [x] 2PT   [x] 3PT                    |  |
+|                            |  |                                                                     |  |
+|                            |  | 100% |                                                              |  |
+|                            |  |  80% |   *-----------*-----------*---------*   (FT)                 |  |
+|                            |  |  60% |     \     *---*-----*----/----*         (2PT / Overall)      |  |
+|                            |  |  40% |   o--o---o-----------o---------o        (3PT)                |  |
+|                            |  |  20% |                                                              |  |
+|                            |  |   0% +----------------------------------------------------------    |  |
+|                            |  |      Oct 24      Nov 01      Nov 08      Nov 15      Nov 20         |  |
+|                            |  +---------------------------------------------------------------------+  |
+|                            |                                                                           |
+|                            |  +---------------------------------------------------------------------+  |
+|                            |  | SESSION HISTORY (Newest First)                                      |  |
+|                            |  | Date       | Player | Free Throws    | Two-Pointers   | Three-Ptrs  |  |
+|                            |  | 2026-11-20 | Ray    | 9/10 (90.0%)   | 14/20 (70.0%)  | 6/15 (40.0%)|  |
+|                            |  | 2026-11-17 | Ray    | 8/10 (80.0%)   | 12/20 (60.0%)  | 5/15 (33.3%)|  |
+|                            |  | ...                                                                 |  |
+|                            |  +---------------------------------------------------------------------+  |
++--------------------------------------------------------------------------------------------------------+
+```
+
+### Dashboard components and preserved rules
+
+- **Player / scope selector (sidebar)**: Mirrors CLI precedence and mutual
+  exclusion (`Default player`, `Specific player` with known-player list + custom
+  case-sensitive input, and `All players (combined)`). Clearly prompts when no
+  default is configured and labels combined views explicitly.
+- **Interactive date-range filter (sidebar)**: Read-only view filter with
+  presets (`All dates`, `Last 7 days`, `Last 30 days`, `Last 90 days`, and
+  `Custom range` with inclusive start/end pickers). Invalid ranges
+  (`start > end`) display a clear inline error. Dynamically updates KPI cards,
+  court visual, trend chart, and history table simultaneously without modifying
+  files.
+- **5-card KPI row**: `Sessions`, `Overall` (weighted
+  `100 * total_makes / total_attempts` across FT + 2PT + 3PT), `Free Throws`,
+  `Two-Pointers`, and `Three-Pointers`. Zero attempts display `N/A`; all
+  percentages round to one decimal place only when displayed.
+- **Dark half-court visual (`court_svg.py`)**: Self-contained inline SVG
+  half-court displaying Free Throw % at the free-throw line, Two-Point % in the
+  2-point area, and Three-Point % along the 3-point arc, each with
+  `makes / attempts`. Escapes all dynamic text with `html.escape()`.
+- **Shooting percentage trend chart over time**: Dynamically reflects active
+  player scope and date-range filter. Groups matching sessions by date in
+  chronological order (oldest to newest), sums makes and attempts per date
+  before calculating percentages (`Overall`, `Free Throws`, `Two-Pointers`,
+  `Three-Pointers`), omits zero-attempt points rather than plotting `0.0%`,
+  supports toggling series, and displays hover tooltips (date, category,
+  percentage, makes/attempts, and session count).
+- **Record session form & default player settings**: Validates all writes
+  through `ShootingSession` and saves via `append_session()` /
+  `set_default_player()`. Editing the player field on the Record Session form
+  overrides the player for that single session without modifying
+  `settings.json`. Read-only views never create files; corrupt JSON or CSV files
+  display clear errors without tracebacks or silent overwrites.
+- **Session history table**: Filtered by active player scope and date range,
+  ordered newest date first, showing `makes/attempts (pct)` per shot category
+  and `"No sessions recorded."` when empty.
+
+## Web dashboard implementation sequence and validation (v2)
+
+1. Update `AGENTS.md`, `pyproject.toml` (`dependencies = ["streamlit>=1.40"]`),
+   and `.streamlit/config.toml`; verify `pip install -e ".[dev]"` on Python 3.14.
+2. Add `format_percentage` and `overall_shot_totals` in `models.py` and build
+   pure-Python dashboard helpers in `dashboard.py` with `tests/test_dashboard.py`
+   (and tests in `tests/test_models.py`).
+3. Build `court_svg.py` and `tests/test_court_svg.py` covering percentages,
+   `N/A`, empty state, zone placement, and HTML escaping.
+4. Add the `web` subcommand in `cli.py` and extend `tests/test_cli.py` (help
+   without file writes, path & theme forwarding, missing-Streamlit handling).
+5. Build `web_app.py` and headless integration tests in `tests/test_web_app.py`
+   using `streamlit.testing.v1.AppTest` with pytest temporary directories.
+6. Run the full `pytest` suite, update `README.md`, and smoke-test the live
+   dashboard in a browser using temporary data files.
+
 ## Deferred features
 
-Editing and deleting sessions, date-range filtering, duplicate detection,
-renaming players, automatic CSV migration, concurrent writers, graphical
-interfaces, and cloud synchronization are outside the first-version scope.
+Editing and deleting sessions, CLI date-range filtering, duplicate detection,
+renaming players, automatic CSV migration, concurrent writers, and cloud
+synchronization remain outside scope.
