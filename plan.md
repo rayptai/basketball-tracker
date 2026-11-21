@@ -1,8 +1,7 @@
 # Basketball Shooting Tracker plan and design
 
-Status: first-version CLI complete and verified on Python 3.14.10; second-version
-dark-themed Streamlit web dashboard planned and approved for upcoming
-implementation.
+Status: first-version CLI and second-version dark-themed Streamlit web dashboard
+implemented and verified on Python 3.14.10.
 
 This document is the single source of truth for the approved application design
 and implementation plan. It replaces `DESIGN.md` to avoid duplicate documents.
@@ -437,6 +436,22 @@ commands fast.
    using `streamlit.testing.v1.AppTest` with pytest temporary directories.
 6. Run the full `pytest` suite, update `README.md`, and smoke-test the live
    dashboard in a browser using temporary data files.
+
+### v2 Implementation results
+
+All six web dashboard implementation steps are complete. `streamlit>=1.40`
+(installed as `streamlit 1.67.0` with bundled `altair 6.3.0`) is declared as a
+standard runtime dependency and loaded lazily when launching `web` so CLI
+commands remain fast.
+
+Validation: `python -m pytest -v` passed all 117 tests (94 original CLI/core
+tests + 23 new model, dashboard, court SVG, CLI `web`, and Streamlit `AppTest`
+tests) with zero warnings. A live server smoke check launched
+`python -m basketball_tracker web --port 8512 --no-browser` against temporary
+files cleanly (no personal data under `data/` was created). Automated Chrome
+visual inspection was unavailable because Chrome remote debugging was not
+enabled locally; users can run `basketball-tracker web` to inspect the live
+dashboard directly.
 
 ## Deferred features
 

@@ -4,7 +4,8 @@ from datetime import date
 import pytest
 
 from basketball_tracker.models import (
-    aggregate_sessions, parse_session_date, shooting_percentage, validate_player_name,
+    ShotTotals, aggregate_sessions, format_percentage, overall_shot_totals,
+    parse_session_date, shooting_percentage, validate_player_name,
 )
 
 
@@ -17,7 +18,23 @@ def test_percentages_and_weighted_aggregation(session):
     assert totals["Free throws"].percentage == 10
     assert shooting_percentage(1, 3) == pytest.approx(100 / 3)
     assert shooting_percentage(0, 0) is None
+    assert format_percentage(None) == "N/A"
+    assert format_percentage(100 / 3) == "33.3%"
+    assert format_percentage(80.0) == "80.0%"
     assert all(total.percentage is None for total in aggregate_sessions([]).values())
+
+
+def test_overall_shot_totals_is_weighted():
+    totals = {
+        "Free throws": ShotTotals(1, 1),       # 100%
+        "Two-pointers": ShotTotals(0, 9),      # 0%
+        "Three-pointers": ShotTotals(0, 0),    # N/A
+    }
+    overall = overall_shot_totals(totals)
+    assert overall == ShotTotals(1, 10)
+    assert overall.percentage == pytest.approx(10.0)
+    assert overall_shot_totals(aggregate_sessions([])) == ShotTotals(0, 0)
+    assert overall_shot_totals(aggregate_sessions([])).percentage is None
 
 
 @pytest.mark.parametrize("changes", [

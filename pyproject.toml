@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "basketball-tracker"
-version = "0.1.0"
-description = "A local command-line basketball shooting tracker"
+version = "0.2.0"
+description = "A local CLI and web dashboard basketball shooting tracker"
 requires-python = ">=3.14"
-dependencies = []
+dependencies = ["streamlit>=1.40"]
 
 [project.optional-dependencies]
 dev = ["pytest>=9"]

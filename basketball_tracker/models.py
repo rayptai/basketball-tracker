@@ -1,6 +1,6 @@
 """Session validation and shooting calculations, independent of storage and CLI."""
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date
 import re
@@ -31,6 +31,11 @@ def parse_session_date(value: str) -> date:
 def shooting_percentage(makes: int, attempts: int) -> float | None:
     """Return an unrounded percentage, or None for an unpracticed category."""
     return 100 * (makes / attempts) if attempts else None
+
+
+def format_percentage(percentage: float | None) -> str:
+    """Format a percentage to one decimal place, or N/A when attempts are zero."""
+    return "N/A" if percentage is None else f"{percentage:.1f}%"
 
 
 @dataclass(frozen=True)
@@ -84,3 +89,11 @@ def aggregate_sessions(sessions: Iterable[ShootingSession]) -> dict[str, ShotTot
             previous = totals[label]
             totals[label] = ShotTotals(previous.makes + shots.makes, previous.attempts + shots.attempts)
     return totals
+
+
+def overall_shot_totals(totals: Mapping[str, ShotTotals]) -> ShotTotals:
+    """Combine makes and attempts across all categories before computing percentage."""
+    return ShotTotals(
+        sum(shots.makes for shots in totals.values()),
+        sum(shots.attempts for shots in totals.values()),
+    )

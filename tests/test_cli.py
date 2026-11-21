@@ -6,7 +6,7 @@ import sys
 
 import pytest
 
-from basketball_tracker.cli import main
+from basketball_tracker.cli import build_streamlit_command, main
 from basketball_tracker.settings import load_settings
 from basketball_tracker.storage import read_sessions
 
@@ -87,7 +87,7 @@ def test_no_default(cli, tmp_path, capsys, arguments):
 
 
 @pytest.mark.parametrize("command", [(), ("add",), ("history",), ("stats",), ("config",),
-                                      ("config", "show"), ("config", "set-player")])
+                                      ("config", "show"), ("config", "set-player"), ("web",)])
 @pytest.mark.parametrize("flag", ["-h", "--help"])
 def test_help(cli, tmp_path, capsys, command, flag):
     with pytest.raises(SystemExit) as result:
@@ -105,11 +105,14 @@ def test_help(cli, tmp_path, capsys, command, flag):
         assert 'basketball-tracker history --player "Jordan Smith"' in output
         assert "basketball-tracker history --all-players" in output
         assert "newest date first" in output
+    if not command or command == ("web",):
+        assert "Usage tips for the web dashboard" in output
+        assert "--port" in output and "--host" in output and "--no-browser" in output
     if not command:
         for option in ("--settings-file", "--data-file", "--date", "--player", "--all-players",
                        "-1 MAKES ATTEMPTS", "-2 MAKES ATTEMPTS", "-3 MAKES ATTEMPTS"):
             assert option in output
-        for command_name in ("add", "history", "stats", "config show", "config set-player"):
+        for command_name in ("add", "history", "stats", "config show", "config set-player", "web"):
             assert f"basketball-tracker {command_name}" in output
         assert "makes followed by attempts" in output
         assert "default" in output
@@ -183,4 +186,46 @@ def test_module_entry_point_in_separate_process(tmp_path):
     )
     assert completed.returncode == 0
     assert "--settings-file" in completed.stdout
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_build_streamlit_command_forwards_paths_and_dark_theme(tmp_path):
+    settings = tmp_path / "custom_settings.json"
+    data = tmp_path / "custom_sessions.csv"
+    command = build_streamlit_command(settings, data, host="127.0.0.1", port=8502, no_browser=True)
+    assert command[1:4] == ["-m", "streamlit", "run"]
+    assert command[4].endswith("web_app.py")
+    assert "--server.address" in command and "127.0.0.1" in command
+    assert "--server.port" in command and "8502" in command
+    assert "--server.headless" in command and "true" in command
+    assert "--browser.gatherUsageStats" in command and "false" in command
+    assert "--theme.base" in command and "dark" in command
+    separator = command.index("--")
+    assert command[separator + 1:] == ["--settings-file", str(settings), "--data-file", str(data)]
+
+
+def test_web_command_validates_port_and_handles_missing_streamlit(cli, tmp_path, monkeypatch, capsys):
+    assert cli("web", "--port", "0") == 1
+    assert "Port must be an integer between 1 and 65535" in capsys.readouterr().err
+    monkeypatch.setattr("basketball_tracker.cli.importlib.util.find_spec", lambda name: None)
+    assert cli("web") == 1
+    error = capsys.readouterr().err
+    assert "Streamlit is not installed" in error and "Traceback" not in error
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_web_command_invokes_streamlit_subprocess(cli, tmp_path, monkeypatch):
+    recorded = {}
+
+    def fake_run(command, check=False):
+        recorded["command"] = command
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr("basketball_tracker.cli.importlib.util.find_spec", lambda name: object())
+    monkeypatch.setattr("basketball_tracker.cli.subprocess.run", fake_run)
+    assert cli("web", "--port", "8510", "--no-browser") == 0
+    command = recorded["command"]
+    assert "--server.port" in command and "8510" in command
+    assert str(tmp_path / "settings.json") in command
+    assert str(tmp_path / "sessions.csv") in command
     assert list(tmp_path.iterdir()) == []

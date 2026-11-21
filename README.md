@@ -1,20 +1,25 @@
 # Basketball Shooting Tracker
 
-A Python 3.14 command-line application that records shooting sessions locally
-and displays player history and aggregate shooting percentages. Application code
-uses only the Python standard library; automated tests use pytest.
+A Python 3.14 command-line application and dark-themed local web dashboard that
+records shooting sessions locally, visualizes shooting percentages on a
+basketball half-court, tracks trends over time, and calculates aggregate player
+statistics. Core logic uses the Python standard library, the web dashboard uses
+Streamlit (`streamlit>=1.40`), and automated tests use pytest.
 
 ## Get started
 
-From the repository directory, check that Python 3.14 is installed:
+From the repository directory, check that Python 3.14 is installed and install
+the package (including Streamlit for the web dashboard):
 
 ```powershell
 python --version
+python -m pip install -e .
 python -m basketball_tracker --help
 python -m basketball_tracker config set-player "Ray"
 python -m basketball_tracker add -1 8 10 -2 12 20 -3 5 15
 python -m basketball_tracker history
 python -m basketball_tracker stats
+python -m basketball_tracker web
 ```
 
 Each shot option requires **makes followed by attempts**:
@@ -117,6 +122,29 @@ Percentages are rounded to one decimal place for display. Zero attempts display
 session percentages. `--all-players` explicitly combines all players and labels
 the output accordingly. An empty selection displays `No sessions recorded.`
 
+## Web dashboard
+
+Launch the dark-themed sports analytics dashboard locally on `http://127.0.0.1:8501`:
+
+```powershell
+basketball-tracker web
+```
+
+Global path overrides go before `web`, just like other commands:
+
+```powershell
+basketball-tracker --settings-file "C:\TrackerData\settings.json" --data-file "C:\TrackerData\sessions.csv" web --port 8502 --no-browser
+```
+
+Dashboard highlights (100% offline, sharing the exact same business logic and data files as the CLI):
+
+- **Player scope & default settings (sidebar):** Switch between the default player, any specific case-sensitive player, or all players (combined), and save a new default player without altering historical sessions.
+- **Interactive date-range filter (sidebar):** Filter all dashboard views by `All dates`, `Last 7 days`, `Last 30 days`, `Last 90 days`, or an inclusive `Custom range`.
+- **5-card KPI row:** Displays `Sessions`, weighted `Overall` shooting percentage across all shot types, `Free Throws`, `Two-Pointers`, and `Three-Pointers`.
+- **Dark half-court shot breakdown:** Self-contained inline SVG half-court displaying Free Throw % at the free-throw line, Two-Point % in the 2-point area, and Three-Point % along the 3-point arc.
+- **Shooting percentage trend over time:** Dynamically updates with active player and date filters, aggregates multiple sessions on the same date before computing percentages, and omits zero-attempt categories rather than plotting `0.0%`.
+- **Record session & history:** Add new sessions (with optional one-off player overrides) and review filtered history newest date first. Read-only views never create files, and corrupt files are reported clearly without overwriting.
+
 ## Local files
 
 Sessions are stored in UTF-8 CSV at `data/sessions.csv`, with one row per session:
@@ -178,6 +206,6 @@ also provides a `basketball-tracker` command in that environment; running via
 `python -m basketball_tracker` from the repository requires no installation.
 
 See [plan.md](plan.md) for the approved design and implementation sequence, and
-[AGENTS.md](AGENTS.md) for contributor guidance. The first version does not support
-editing/deleting sessions, date-range filtering, player renaming, automatic
-migration, concurrent writers, or cloud synchronization.
+[AGENTS.md](AGENTS.md) for contributor guidance. Editing/deleting sessions, CLI
+date-range filtering, player renaming, automatic migration, concurrent writers,
+and cloud synchronization remain outside scope.

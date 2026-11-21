@@ -3,14 +3,26 @@
 import argparse
 from collections.abc import Sequence
 from datetime import date
+import importlib.util
 from pathlib import Path
+import subprocess
 import sys
 
 from basketball_tracker.models import (
-    ShootingSession, ShotTotals, aggregate_sessions, parse_session_date, validate_player_name,
+    ShootingSession, ShotTotals, aggregate_sessions, format_percentage,
+    parse_session_date, validate_player_name,
 )
 from basketball_tracker.settings import load_settings, set_default_player
 from basketball_tracker.storage import append_session, read_sessions
+
+
+DASHBOARD_THEME_ARGS = (
+    "--theme.base", "dark",
+    "--theme.backgroundColor", "#0B1120",
+    "--theme.secondaryBackgroundColor", "#131C2E",
+    "--theme.primaryColor", "#F97316",
+    "--theme.textColor", "#F8FAFC",
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -77,7 +89,24 @@ def build_parser() -> argparse.ArgumentParser:
     show = config_commands.add_parser("show", help="Show settings without creating files")
     set_player = config_commands.add_parser("set-player", help="Save the default player name")
     set_player.add_argument("player_name", help='Default player name; quote names containing spaces')
-    command_parsers.extend([config, show, set_player])
+    web = commands.add_parser(
+        "web",
+        help="Launch the dark-themed local web dashboard",
+        description="Start the local Streamlit web dashboard using the selected settings and session files.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Usage tips for the web dashboard:\n"
+            "  Launch locally: basketball-tracker web\n"
+            "  Custom data files (global options go before web):\n"
+            '    basketball-tracker --settings-file custom/settings.json --data-file custom/sessions.csv web\n'
+            "  Custom port without opening a browser tab:\n"
+            "    basketball-tracker web --port 8502 --no-browser"
+        ),
+    )
+    web.add_argument("--host", default="127.0.0.1", help="Host address to bind (default: 127.0.0.1)")
+    web.add_argument("--port", type=int, default=8501, help="Port number to serve on (default: 8501)")
+    web.add_argument("--no-browser", action="store_true", help="Do not automatically open a browser window")
+    command_parsers.extend([config, show, set_player, web])
     # Reuse each command's help so the complete reference stays in sync with it.
     parser.epilog = (
         "Global file options go before the command.\n"
@@ -100,11 +129,62 @@ def select_player(explicit_player: str | None, settings_path: Path) -> str:
 
 def display_totals(totals: dict[str, ShotTotals]) -> None:
     for label, shots in totals.items():
-        percentage = "N/A" if shots.percentage is None else f"{shots.percentage:.1f}%"
-        print(f"  {label}: {shots.makes}/{shots.attempts} ({percentage})")
+        print(f"  {label}: {shots.makes}/{shots.attempts} ({format_percentage(shots.percentage)})")
 
 
-def run_command(arguments: argparse.Namespace) -> None:
+def build_streamlit_command(
+    settings_file: Path,
+    data_file: Path,
+    *,
+    host: str = "127.0.0.1",
+    port: int = 8501,
+    no_browser: bool = False,
+) -> list[str]:
+    if not 1 <= port <= 65535:
+        raise ValueError("Port must be an integer between 1 and 65535.")
+    if not host or not host.strip():
+        raise ValueError("Host must not be empty.")
+    app_path = Path(__file__).with_name("web_app.py")
+    command = [
+        sys.executable, "-m", "streamlit", "run", str(app_path),
+        "--server.address", host.strip(),
+        "--server.port", str(port),
+        "--browser.gatherUsageStats", "false",
+        *DASHBOARD_THEME_ARGS,
+    ]
+    if no_browser:
+        command.extend(["--server.headless", "true"])
+    command.extend([
+        "--",
+        "--settings-file", str(settings_file),
+        "--data-file", str(data_file),
+    ])
+    return command
+
+
+def launch_web_dashboard(arguments: argparse.Namespace) -> int:
+    command = build_streamlit_command(
+        arguments.settings_file,
+        arguments.data_file,
+        host=arguments.host,
+        port=arguments.port,
+        no_browser=arguments.no_browser,
+    )
+    if importlib.util.find_spec("streamlit") is None:
+        raise ValueError('Streamlit is not installed. Install dependencies with: python -m pip install -e "."')
+    try:
+        completed = subprocess.run(command, check=False)
+    except KeyboardInterrupt:
+        return 0
+    except OSError as error:
+        raise OSError(f"Cannot launch web dashboard: {error}") from error
+    return completed.returncode
+
+
+def run_command(arguments: argparse.Namespace) -> int:
+    if arguments.command == "web":
+        return launch_web_dashboard(arguments)
+
     if arguments.command == "config":
         if arguments.config_command == "show":
             settings = load_settings(arguments.settings_file)
@@ -113,7 +193,7 @@ def run_command(arguments: argparse.Namespace) -> None:
         else:
             set_default_player(arguments.settings_file, arguments.player_name)
             print(f"Default player saved: {validate_player_name(arguments.player_name)}")
-        return
+        return 0
 
     if arguments.command == "add":
         player = select_player(arguments.player, arguments.settings_file)
@@ -123,7 +203,7 @@ def run_command(arguments: argparse.Namespace) -> None:
         )
         append_session(arguments.data_file, session)
         print(f"Saved session for {player} on {session.date.isoformat()}.")
-        return
+        return 0
 
     player = None if arguments.all_players else select_player(arguments.player, arguments.settings_file)
     sessions = read_sessions(arguments.data_file)
@@ -140,14 +220,14 @@ def run_command(arguments: argparse.Namespace) -> None:
     else:
         print(f"Sessions: {len(sessions)}")
         display_totals(aggregate_sessions(sessions))
+    return 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     arguments = parser.parse_args(argv)
     try:
-        run_command(arguments)
+        return run_command(arguments)
     except (ValueError, OSError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
-    return 0
